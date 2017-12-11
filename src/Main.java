@@ -30,7 +30,7 @@ public class Main {
 	 * Formula for computing line of best fit from:
 	 * https://www.varsitytutors.com/hotmath/hotmath_help/topics/line-of-best-fit
 	 * 
-	 * 0(n^2)
+	 * 0(n)
 	 * @param pts X, Y Points
 	 * @return A SlopeIntercept object representing a linear function of the line of best fit
 	 */
@@ -61,7 +61,7 @@ public class Main {
 	 * Scrapes the table containing the closing stock prices of:
 	 * "https://finance.yahoo.com/quote/" + tick + "/history?&interval=1d&filter=history&frequency=1d"
 	 * 
-	 * O(n^2)
+	 * O(n)
 	 * 
 	 * @param tick The Ticker of the Stock that is being scraped
 	 * @return A LinkedList<Point2D.Double> containing points for a graph.  X is time starting at 0, Y is stock price
