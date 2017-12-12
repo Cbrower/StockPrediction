@@ -4,6 +4,9 @@ import java.io.IOException;
 import java.util.LinkedList;
 import java.util.Scanner;
 
+/*
+ * Jaunt is downloadable from http://jaunt-api.com/
+ */
 import com.jaunt.NotFound;
 import com.jaunt.ResponseException;
 import com.jaunt.UserAgent;
@@ -21,9 +24,17 @@ import com.jaunt.component.Table;
  * @author Cole Brower, Jacob Downey
  *
  */
-public class Main {
+public class StockPredictor {
 	
 	public static final String TAG = "Close";
+	
+	private LinkedList<Point2D.Double> pts;
+	private String tick;
+	private SlopeIntercept line = null;
+	
+	public StockPredictor(String ticker){
+		tick = ticker;
+	}
 	
 	/**
 	 * Computes the function of the line of best fit for the given set of points
@@ -31,10 +42,8 @@ public class Main {
 	 * https://www.varsitytutors.com/hotmath/hotmath_help/topics/line-of-best-fit
 	 * 
 	 * 0(n)
-	 * @param pts X, Y Points
-	 * @return A SlopeIntercept object representing a linear function of the line of best fit
 	 */
-	public static SlopeIntercept computeFunction(LinkedList<Point2D.Double> pts){
+	private void computeFunction(){
 		double xAve = 0;
 		double yAve = 0;
 		double num = 0;
@@ -54,7 +63,7 @@ public class Main {
 		System.out.println(m);
 		double b = yAve - m * xAve;
 		System.out.println(b);
-		return new SlopeIntercept(m, b);
+		line =  new SlopeIntercept(m, b);
 	}
 	
 	/**
@@ -68,8 +77,8 @@ public class Main {
 	 * @throws ResponseException
 	 * @throws NotFound
 	 */
-	public static LinkedList<Point2D.Double> loadFromScrape(String tick) throws ResponseException, NotFound{
-		LinkedList<Point2D.Double> pts = new LinkedList<>();
+	public void loadFromScrape() throws ResponseException, NotFound{
+		pts = new LinkedList<>();
 		int closeIndex = 4; //In the table, the value of the stock after closing is the fifth column
 		UserAgent agent = new UserAgent();
 		agent.visit("https://finance.yahoo.com/quote/" + tick + "/history?&interval=1d&filter=history&frequency=1d");
@@ -105,7 +114,12 @@ public class Main {
 			pt.x = len - pt.x;
 		}
 		
-		return pts;
+		try {
+			agent.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}		
+		computeFunction();
 	}
 	
 	/**
@@ -113,13 +127,12 @@ public class Main {
 	 * "https://finance.yahoo.com/quote/" + tick + "/history?&interval=1d&filter=history&frequency=1d"
 	 * 
 	 * O(n)
-	 * @param filename CSV filename
-	 * @return A LinkedList<Point2D.Double> containing points for a graph.  X is time starting at 0, Y is stock price
 	 */
-	public static LinkedList<Point2D.Double> loadFromCSV(String filename){
+	public void loadFromCSV(){
+		String filename = tick + ".csv";
 		File f = null;
 		Scanner scan = null;
-		LinkedList<Point2D.Double> pts = new LinkedList<>();
+		pts = new LinkedList<>();
 		try{
 			//Finding the index of the closing stock price in the CSV file
 			f = new File(filename);
@@ -141,35 +154,120 @@ public class Main {
 				columns = scan.nextLine().split(",");
 				pts.add(new Point2D.Double(counter++, Double.parseDouble(columns[index])));
 			}
-			return pts;
+			computeFunction();
 		} catch (IOException e){
 			System.err.println("Failed to Load File");
-			return null;
 		} finally {
 			if (scan != null){
 				scan.close();
 			}
 		}
 	}
+	
+	/**
+	 * Computes the function of the line of best fit for the stock
+	 * Precondition: Must have already loaded from scrape or from csv before
+	 * calling this function
+	 * 
+	 * @param x The number of days into the future that you want to compute
+	 * @return The predicted stock price in the future as a double
+	 */
+	public double predict(int x){
+		return line.compute(x + pts.size()-1);
+	}
 
 	public static void main(String[] args) {
-		LinkedList<Point2D.Double> pts = null;
+		StockPredictor stock = null;
 		if (args.length < 3){
 			System.err.println("Usage: java Main <Stock Ticker> <Time in days> <0=Online, 1=Read From CSV>");
 			System.exit(1);
 		}
-		
+		stock = new StockPredictor(args[0]);
 		if (Integer.parseInt(args[2]) == 0){
 			try {
-				pts = loadFromScrape(args[0]);
+				stock.loadFromScrape();
 			} catch (NotFound | ResponseException e) {
 				e.printStackTrace();
 			}
 		} else {
-			pts = loadFromCSV(args[0] + ".csv");
+			stock.loadFromCSV();
 		}
 		int time = Integer.parseInt(args[1]);
-		SlopeIntercept mb = computeFunction(pts);
-		System.out.printf("The price " + time + " days from now should be about: $%.2f", mb.compute(time + pts.size() - 1));
+		System.out.printf("The price " + time + " days from now should be about: $%.2f", stock.predict(time));
+	}
+	
+	/*
+	 * Kept this as a separate file but due to the requirements of one file upload for
+	 * turnitin, I moved this into the same file
+	 */
+	/**
+	 * Represents a function y = mx + b
+	 * 
+	 * @author Cole Brower and Jacob Downey
+	 *
+	 */
+	protected class SlopeIntercept {
+		
+		private double m, b;
+		
+		/**
+		 * Assigns default values of zero for the slope and the y-intercept
+		 */
+		public SlopeIntercept(){
+			m = 0;
+			b = 0;
+		}
+		
+		/**
+		 * Creates a SlopeIntercept Object
+		 * @param m The slope of the line
+		 * @param b The y-intercept of the line
+		 */
+		public SlopeIntercept(double m, double b){
+			this.m = m;
+			this.b = b;
+		}
+
+		/**
+		 * Returns the slope of the line
+		 * @return A double representing the slope
+		 */
+		public double getM() {
+			return m;
+		}
+
+		/**
+		 * Changes the value of the slope of the line
+		 * @param m A double representing the new slope of the line
+		 */
+		public void setM(double m) {
+			this.m = m;
+		}
+
+		/**
+		 * Returns the y-intercept of the line
+		 * @return A double representing the y-intercept
+		 */
+		public double getB() {
+			return b;
+		}
+
+		/**
+		 * Changes the value of the y-intercept of the line
+		 * @param b A double representing the y-intercept of the line
+		 */
+		public void setB(double b) {
+			this.b = b;
+		}
+		
+		/**
+		 * Computes the f(x) value of the line f(x) = mx + b
+		 * @param x The x value used in f(x)
+		 * @return A double value representing the value returned by mx + b
+		 */
+		public double compute(int x){
+			return x * m + b;
+		}
+
 	}
 }
